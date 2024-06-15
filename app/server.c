@@ -7,12 +7,16 @@
 #include <errno.h>
 #include <unistd.h>
 
+const char *response_Ok = "HTTP/1.1 200 OK\r\n\r\n";
+const char *response_NotFound = "HTTP/1.1 404 OK\r\n\r\n";
+
 int main() {
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
 
-    int server_fd, client_addr_len;
+    int server_fd;
     struct sockaddr_in client_addr;
+    int client_addr_len = sizeof(client_addr);
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
@@ -47,9 +51,10 @@ int main() {
     printf("Waiting for a client to connect...\n");
     client_addr_len = sizeof(client_addr);
 
-    accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
+    int fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
     printf("Client connected\n");
-
+    int sendResult = send(fd, response_Ok, strlen(response_Ok), 0);
+    close(fd);
     close(server_fd);
 
     return 0;

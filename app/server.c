@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <unistd.h>
 
+#define RESPNESE_SIZE
+
 const char *response_Ok = "HTTP/1.1 200 OK\r\n\r\n";
 const char *response_NotFound = "HTTP/1.1 404 Not Found\r\n\r\n";
 
@@ -85,7 +87,15 @@ int main() {
 
         if (strcmp(path, "/") == 0 || strcmp(path, "/index.html") == 0) {
             int sendResult = send(client_fd, response_Ok, strlen(response_Ok), 0);
-        } else {
+        }
+        else if(strncmp(path,"/echo/",6)==0){
+            char *str=path+6;
+            char *response_Echo=(char*) malloc(1024);
+            sprintf(response_Echo,"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
+                    strlen(str),str);
+            int sendResult = send(client_fd, response_Echo, strlen(response_Echo), 0);
+        }
+        else {
             int sendResult = send(client_fd, response_NotFound, strlen(response_NotFound), 0);
         }
 

@@ -20,7 +20,7 @@ void *handle_connection(void *pclient_socket);
 
 int main(int argc, char *argv[]) {
     if (argc >= 2 && strcmp(argv[1], "--directory") == 0) {
-        dir=argv[2];
+        fileDir = argv[2];
     }
 
     setbuf(stdout, NULL);
@@ -106,39 +106,40 @@ void *handle_connection(void *pclient_fd) {
             int sendResult = send(client_fd, response_Ok, strlen(response_Ok), 0);
             printf("path: %s  now response: %s \nsendResult: %d", path, response_Ok, sendResult);
         } else if (strncmp(path, "/echo/", 6) == 0) {
-            printf("echo://----------------\n");
             char *str = path + 6;
             char *response_Echo = (char *) malloc(1024);
             sprintf(response_Echo, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s",
                     strlen(str), str);
             int sendResult = send(client_fd, response_Echo, strlen(response_Echo), 0);
             printf("path: %s  now response: %s \nsendResult: %d", path, response_Echo, sendResult);
+            free(response_Echo);
         } else if (strncmp(path, "/user-agent", 11) == 0) {
             char *response_UserAgent = (char *) malloc(1024);
             sprintf(response_UserAgent, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s",
                     strlen(UserAgent), UserAgent);
             int sendResult = send(client_fd, response_UserAgent, strlen(response_UserAgent), 0);
             printf("path: %s  now response: %s \nsendResult: %d", path, response_UserAgent, sendResult);
+            free(response_UserAgent);
         } else if (strncmp(path, "/files/", 7) == 0 && strcmp(method, "GET") == 0) {
-            char *fileName=path+7;
+            char *fileName = path + 7;
             char *response_files = (char *) malloc(1024);
             //char *filePath=(char *) malloc(strlen(fileDir)+ strlen(fileName)+1);
-            char *filePath=(char *) malloc(128);
-            strcpy(filePath,fileDir);
-            strcat(filePath,fileName);
-            printf("filePath:%s",filePath);
+            char *filePath = (char *) malloc(128);
+            strcpy(filePath, fileDir);
+            strcat(filePath, fileName);
+            printf("filePath:%s", filePath);
             if (access(filePath, F_OK) != 0) {
                 int sendResult = send(client_fd, response_NotFound, strlen(response_NotFound), 0);
                 printf("path: %s  now response: %s \nsendResult: %d", path, response_NotFound, sendResult);
-            }else{
+            } else {
                 FILE *fptr = fopen(filePath, "r");
                 if (!fptr)
                     printf("%s : %s", fileDir, filePath);
                 fseek(fptr, 0, SEEK_END);
-                uint size = ftell(fptr);
+                int size = ftell(fptr);
                 fseek(fptr, 0, SEEK_SET);
                 printf("skdnakjn %d", size);
-                char *contents = (char *)malloc(size);
+                char *contents = (char *) malloc(size);
                 fread(contents, size, 1, fptr);
                 sprintf(response_files,
                         "HTTP/1.1 200 OK\r\nContent-Type: "
@@ -147,7 +148,11 @@ void *handle_connection(void *pclient_fd) {
                         size, contents);
                 int sendResult = send(client_fd, response_files, strlen(response_files), 0);
                 printf("path: %s  now response: %s \nsendResult: %d", path, response_files, sendResult);
+                fclose(fptr);
+                free(contents);
             }
+            free(response_files);
+            free(filePath);
         } else {
             int sendResult = send(client_fd, response_NotFound, strlen(response_NotFound), 0);
             printf("path: %s  now response: %s \nsendResult: %d", path, response_NotFound, sendResult);
@@ -158,6 +163,6 @@ void *handle_connection(void *pclient_fd) {
 
     }
 
-
+    free(httpRequest);
     close(client_fd);
 }

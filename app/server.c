@@ -12,12 +12,17 @@
 #define RESPNESE_SIZE 4096
 
 const char *response_Ok = "HTTP/1.1 200 OK\r\n\r\n";
-
 const char *response_NotFound = "HTTP/1.1 404 Not Found\r\n\r\n";
+
+char *fileDir = NULL;
 
 void *handle_connection(void *pclient_socket);
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc >= 2 && strcmp(argv[1], "--directory") == 0) {
+        dir=argv[2];
+    }
+
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
 
@@ -58,11 +63,11 @@ int main() {
     printf("Waiting for a client to connect...\n");
     client_addr_len = sizeof(client_addr);
 
-    while (true){
+    while (true) {
         int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
-        printf("Client: %ld connected\n",client_fd);
+        printf("Client: %ld connected\n", client_fd);
         pthread_t new_process;
-        pthread_create(&new_process,NULL,handle_connection,&client_fd);
+        pthread_create(&new_process, NULL, handle_connection, &client_fd);
     }
 
     close(server_fd);
@@ -70,8 +75,8 @@ int main() {
     return 0;
 }
 
-void *handle_connection(void *pclient_fd){
-    int client_fd = *((int *)pclient_fd);
+void *handle_connection(void *pclient_fd) {
+    int client_fd = *((int *) pclient_fd);
     //const int MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB
 
     // 接收HTTP请求
@@ -80,14 +85,14 @@ void *handle_connection(void *pclient_fd){
     int bytesRead = recv(client_fd, httpRequest, bufferSize, 0);
 
     printf("current httpRequest:%s -------httpRequestEnd\n bytesRead:%d\n", httpRequest, bytesRead);
-    char *defaultUserAgent="default ua";
+    char *defaultUserAgent = "default ua";
     char method[10];
     char path[100];
     char UserAgent[100];
     printf("create init char\n");
     sscanf(httpRequest, "%s", method);
     sscanf(strchr(httpRequest, ' ') + 1, "%s", path);
-    char* userAgentStart = strstr(httpRequest, "User-Agent: ");
+    char *userAgentStart = strstr(httpRequest, "User-Agent: ");
     if (userAgentStart != NULL) {
         sscanf(userAgentStart + 11, "%s", UserAgent);
     } else {
@@ -114,6 +119,35 @@ void *handle_connection(void *pclient_fd){
                     strlen(UserAgent), UserAgent);
             int sendResult = send(client_fd, response_UserAgent, strlen(response_UserAgent), 0);
             printf("path: %s  now response: %s \nsendResult: %d", path, response_UserAgent, sendResult);
+        } else if (strncmp(path, "/files/", 7) == 0 && strcmp(method, "GET") == 0) {
+            char *fileName=path+7;
+            char *response_files = (char *) malloc(1024);
+            //char *filePath=(char *) malloc(strlen(fileDir)+ strlen(fileName)+1);
+            char *filePath=(char *) malloc(128);
+            strcpy(filePath,fileDir);
+            strcat(filePath,fileName);
+            printf("filePath:%s",filePath);
+            if (access(filePath, F_OK) != 0) {
+                int sendResult = send(client_fd, response_NotFound, strlen(response_NotFound), 0);
+                printf("path: %s  now response: %s \nsendResult: %d", path, response_NotFound, sendResult);
+            }else{
+                FILE *fptr = fopen(filePath, "r");
+                if (!fptr)
+                    printf("%s : %s", fileDir, filePath);
+                fseek(fptr, 0, SEEK_END);
+                uint size = ftell(fptr);
+                fseek(fptr, 0, SEEK_SET);
+                printf("skdnakjn %d", size);
+                char *contents = (char *)malloc(size);
+                fread(contents, size, 1, fptr);
+                sprintf(response_files,
+                        "HTTP/1.1 200 OK\r\nContent-Type: "
+                        "application/octet-stream\r\nContent-Length: "
+                        "%d\r\n\r\n%s\r\n\r\n",
+                        size, contents);
+                int sendResult = send(client_fd, response_files, strlen(response_files), 0);
+                printf("path: %s  now response: %s \nsendResult: %d", path, response_files, sendResult);
+            }
         } else {
             int sendResult = send(client_fd, response_NotFound, strlen(response_NotFound), 0);
             printf("path: %s  now response: %s \nsendResult: %d", path, response_NotFound, sendResult);

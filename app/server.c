@@ -92,6 +92,8 @@ void *handle_connection(void *pclient_fd) {
     char path[100];
     char UserAgent[100];
     char ContentType[100];
+    int AcceptEncodingCount=0; // 客户端编码请求数量
+    char* AcceptEncoding[100]; // 客户端编码请求
     printf("create init char\n");
     sscanf(httpRequest, "%s", method);
     sscanf(strchr(httpRequest, ' ') + 1, "%s", path);
@@ -106,6 +108,20 @@ void *handle_connection(void *pclient_fd) {
     if (ContentTypeStart != NULL) {
         sscanf(ContentTypeStart + 13, "%s", ContentType);
     }
+    char* AcceptEncodingStart = strstr(httpRequest, "Accept-Encoding: ");
+    if (AcceptEncodingStart != NULL) {
+        AcceptEncodingStart += strlen("Accept-Encoding: ");
+        // 忽略 \r\n\r\n 标记
+        char* endOfHeader = strstr(AcceptEncodingStart, "\r\n\r\n");
+        if (endOfHeader != NULL) {
+            *endOfHeader = '\0';
+        }
+        char* encoding = strtok(AcceptEncodingStart, ",");
+        while (encoding != NULL && AcceptEncodingCount < 100) {
+            AcceptEncoding[AcceptEncodingCount++] = encoding;
+            encoding = strtok(NULL, ",");
+        }
+    }
 
     printf("current Method:%s Path:%s UserAgent:%s\n", method, path, UserAgent);
 
@@ -118,6 +134,12 @@ void *handle_connection(void *pclient_fd) {
             char *response_Echo = (char *) malloc(1024);
             sprintf(response_Echo, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s",
                     strlen(str), str);
+            for (int i = 0; i < AcceptEncodingCount; ++i) {
+                if(strcmp(AcceptEncoding[i],"gzip")==0){
+                    sprintf(response_Echo, "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s",
+                            strlen(str), str);
+                }
+            }
             int sendResult = send(client_fd, response_Echo, strlen(response_Echo), 0);
             printf("path: %s  now response: %s \nsendResult: %d", path, response_Echo, sendResult);
             free(response_Echo);

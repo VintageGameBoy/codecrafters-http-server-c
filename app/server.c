@@ -8,6 +8,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <zlib.h>
 
 #define RESPNESE_SIZE 4096
 
@@ -17,6 +18,9 @@ const char *response_NotFound = "HTTP/1.1 404 Not Found\r\n\r\n";
 char *fileDir = NULL;
 
 void *handle_connection(void *pclient_socket);
+
+//https://stackoverflow.com/a/57699371/7292958 从这里复制过来的
+int compressToGzip(const char* input, int inputSize, char* output, int outputSize);
 
 int main(int argc, char *argv[]) {
     if (argc >= 2 && strcmp(argv[1], "--directory") == 0) {
@@ -136,18 +140,41 @@ void *handle_connection(void *pclient_fd) {
         } else if (strncmp(path, "/echo/", 6) == 0) {
             char *str = path + 6;
             char *response_Echo = (char *) malloc(1024);
+            bool sendState=false;
             sprintf(response_Echo, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s",
                     strlen(str), str);
             for (int i = 0; i < AcceptEncodingCount; ++i) {
                 if (strncmp(AcceptEncoding[i], "gzip", 4) == 0) {
-                    sprintf(response_Echo,
-                            "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s",
-                            strlen(str), str);
+                    // 创建一个缓冲区用于存储压缩后的数据
+                    char compressedData[1024];
+                    int compressedSize = compressToGzip(str, strlen(str), compressedData, sizeof(compressedData));
+
+//                    // 检查压缩后的数据是否比原始数据更小
+//                    if (compressedSize < strlen(str)) {
+                        // 更新响应头，指明响应内容经过gzip压缩
+                        sprintf(response_Echo,
+                                "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n",
+                                compressedSize);
+                        // 发送响应头
+                        send(client_fd, response_Echo, strlen(response_Echo), 0);
+                        // 发送压缩后的数据
+                        send(client_fd, compressedData, compressedSize, 0);
+//                    } else {
+//                        // 压缩后的数据比原始数据更大，不进行压缩
+//                        sprintf(response_Echo,
+//                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n%s",
+//                                strlen(str), str);
+//                        send(client_fd, response_Echo, strlen(response_Echo), 0);
+//                    }
+                    sendState=true;
                     break;
                 }
+
             }
-            int sendResult = send(client_fd, response_Echo, strlen(response_Echo), 0);
-            printf("path: %s  now response: %s \nsendResult: %d", path, response_Echo, sendResult);
+            if (!sendState){
+                int sendResult = send(client_fd, response_Echo, strlen(response_Echo), 0);
+                printf("path: %s  now response: %s \nsendResult: %d", path, response_Echo, sendResult);
+            }
             free(response_Echo);
         } else if (strncmp(path, "/user-agent", 11) == 0) {
             char *response_UserAgent = (char *) malloc(1024);
@@ -222,7 +249,29 @@ void *handle_connection(void *pclient_fd) {
     } else {//这里要放一个不支持这个协议的返回，我不知道些什么先空着
 
     }
+//    for (int i = 0; i < AcceptEncodingCount; i++) {
+//        free(AcceptEncoding[i]);
+//    }
     free(pclient_fd);
     free(httpRequest);
     close(client_fd);
+}
+
+int compressToGzip(const char* input, int inputSize, char* output, int outputSize)
+{
+    z_stream zs;
+    zs.zalloc = Z_NULL;
+    zs.zfree = Z_NULL;
+    zs.opaque = Z_NULL;
+    zs.avail_in = (uInt)inputSize;
+    zs.next_in = (Bytef *)input;
+    zs.avail_out = (uInt)outputSize;
+    zs.next_out = (Bytef *)output;
+
+    // hard to believe they don't have a macro for gzip encoding, "Add 16" is the best thing zlib can do:
+    // "Add 16 to windowBits to write a simple gzip header and trailer around the compressed data instead of a zlib wrapper"
+    deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY);
+    deflate(&zs, Z_FINISH);
+    deflateEnd(&zs);
+    return zs.total_out;
 }

@@ -17,5 +17,6 @@ file(GLOB_RECURSE SOURCES "app/*.c")
 # 添加可执行文件
 add_executable(CODECRAFTERS-HTTP-SERVER-C ${SOURCES})
 
+target_link_libraries(CODECRAFTERS-HTTP-SERVER-C -lz)
 # 如果需要链接其他库，可以在这里添加
 # target_link_libraries(CodeCraftersExecutable some_library)

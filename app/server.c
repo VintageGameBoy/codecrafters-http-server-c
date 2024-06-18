@@ -89,6 +89,7 @@ void *handle_connection(void *pclient_fd) {
     char method[10];
     char path[100];
     char UserAgent[100];
+    char ContentType[100];
     printf("create init char\n");
     sscanf(httpRequest, "%s", method);
     sscanf(strchr(httpRequest, ' ') + 1, "%s", path);
@@ -99,6 +100,11 @@ void *handle_connection(void *pclient_fd) {
         strncpy(UserAgent, defaultUserAgent, sizeof(UserAgent));
         UserAgent[sizeof(UserAgent) - 1] = '\0';
     }
+    char *ContentTypeStart = strstr(httpRequest, "Content-Type: ");
+    if (ContentTypeStart != NULL) {
+        sscanf(ContentTypeStart + 13, "%s", ContentType);
+    }
+
     printf("current Method:%s Path:%s UserAgent:%s\n", method, path, UserAgent);
 
     if (strcmp(method, "GET") == 0 || strcmp(method, "POST") == 0) {
@@ -152,6 +158,30 @@ void *handle_connection(void *pclient_fd) {
                 free(contents);
             }
             free(response_files);
+            free(filePath);
+        } else if (strncmp(path, "/files/", 7) == 0 && strcmp(method, "POST") == 0 &&
+                   strcmp(ContentType, "application/octet-stream") == 0) {
+            char *fileName = path + 7;
+            char *filePath = (char *) malloc(128);
+            strcpy(filePath, fileDir);
+            strcat(filePath, fileName);
+            char *dataStart = strstr(httpRequest, "\r\n\r\n");
+            if (access(filePath, F_OK) == 0 || dataStart == NULL) { //已经存在或者没数据
+                int sendResult = send(client_fd, response_NotFound, strlen(response_NotFound), 0);
+                printf("path: %s  now response: %s \nsendResult: %d", path, response_NotFound, sendResult);
+            } else {
+                char *response = "HTTP/1.1 201 Created\r\n\r\n";
+                FILE *fptr = fopen(filePath, "w");
+                if (!fptr)
+                    printf("%s : %s", fileDir, filePath);
+                fprintf(fptr, dataStart + 4);
+                int sendResult = send(client_fd, response, strlen(response), 0);
+                printf("path: %s  now response: %s \nsendResult: %d", path, response, sendResult);
+                fclose(fptr);
+                free(response);
+            }
+
+
             free(filePath);
         } else {
             int sendResult = send(client_fd, response_NotFound, strlen(response_NotFound), 0);

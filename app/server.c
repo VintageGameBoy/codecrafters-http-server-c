@@ -65,9 +65,11 @@ int main(int argc, char *argv[]) {
 
     while (true) {
         int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
+        int *client_fd_ptr = (int *) malloc(sizeof(int));
+        *client_fd_ptr = client_fd;
         printf("Client: %ld connected\n", client_fd);
         pthread_t new_process;
-        pthread_create(&new_process, NULL, handle_connection, &client_fd);
+        pthread_create(&new_process, NULL, handle_connection, client_fd_ptr);
     }
 
     close(server_fd);
@@ -192,7 +194,7 @@ void *handle_connection(void *pclient_fd) {
     } else {//这里要放一个不支持这个协议的返回，我不知道些什么先空着
 
     }
-
+    free(pclient_fd);
     free(httpRequest);
     close(client_fd);
 }
